@@ -1,0 +1,128 @@
+' This file defines functions that allow for inspecting type information.
+' This obviously depends upon the ability to instance a class.
+!include <classy/plumbing/class-instancing>
+
+' Function that allows asserting that the type of a provided test value matches
+' the given expectation. This respects type inheritance as well.
+!unquoted procedure $assertType($expected, $actual)
+  !if (%not($isDerivedFrom($determineType($actual), $expected)))
+    !$error = 'Unexpected type encountered.'
+    !$expectation = 'Expected ' + $expected + ' but was ' + $type
+    $fail($error + ' ' + $expectation)
+  !endif
+!endprocedure
+
+' Function that determines the type of a provided value and returns it as a
+' string. This includes 3 built in types of string, int, and bool.
+!unquoted function $determineType($val)
+  !$converted = %string($val)
+
+  !if (0 == %strpos($converted, $CLASSINS))
+    !return $getClassFromInstancePointer($val, 'while determining type')
+  !endif
+
+  !$char = %substr($converted, 0, 1)
+
+  !if (%not($isDigit($char)))
+    !return 'string'
+  !endif
+
+  !if (1 != %strlen($converted)) || ('0' != $char && '1' != $char)
+    !return 'int'
+  !else
+    !return 'bool'
+  !endif
+!endfunction
+
+' Function that determines the name of the class from a given instance pointer.
+' Optionally, a message can be provided for additional help when an error is
+' reached.
+!unquoted function $getClassFromInstancePointer($ptr, $context='')
+  !$converted = %string($ptr)
+  !$pos = %strpos($converted, $CLASS)
+
+  !if ('-1' == $pos)
+    !$error = 'Attempting to find class from invalid instance pointer'
+    $fail($error + ' ' + $context + '.')
+  !endif
+
+  !return %substr($converted, $pos + %strlen($CLASS))
+!endfunction
+
+' Function to determine the type of a given property of the provided class
+' instance.
+!unquoted function $getVarTypeFromInstance($inst, $var)
+  !local $classVarRef = %get_variable_value($nameClassVarRef($var, $getClassFromInstancePointer($inst, 'while determining type of class var')))
+
+  !return %get_variable_value($classVarRef + '_type')
+!endfunction
+
+' Function to determine if the specified class is derived from a specified
+' ancestor class.
+!unquoted function $isDerivedFrom($class, $ancestorClass)
+  !if $class == $ancestorClass
+    !return %true()
+  !endif
+
+  !$loopSize = $getClassParentCount($class)
+
+  !if 0 != $loopSize
+    !$loop = $loopSize
+
+    !while 0 != $loop
+      !$loop = $loop - 1
+      !$i = $loopSize - $loop
+
+      !if $ancestorClass == $getClassParentByIndex($i, $class)
+        !return %true()
+      !endif
+    !endwhile
+
+    !$loop = $loopSize
+
+    !while 0 != $loop
+      !$loop = $loop - 1
+      !$i = $loopSize - $loop
+
+      !$parentClass = $getClassParentByIndex($i, $class)
+
+      !if %true() == $isDerivedFrom($parentClass, $ancestorClass)
+        !return %true()
+      !endif
+    !endwhile
+  !endif
+
+  !return %false()
+!endfunction
+
+' Function to determine if the given value is a sequence of digits.
+!unquoted function $isDigit ($val)
+  !$converted = %string($val)
+  !$len = %strlen($converted)
+  !$loop = $len
+  !$return = %true()
+
+  !while 0 != $loop
+    !$loop = $loop - 1
+    !$i = $len - $loop - 1
+    !$c = %substr($converted, $i, 1)
+    !$notInFirstSet = %false()
+    !$notInSecondSet = %false()
+    
+    !if '0' != $c && '1' != $c && '2' != $c && '3' != $c && '4' != $c
+      !$notInFirstSet = %true()
+    !endif
+
+    !if %true() == $notInFirstSet && '5' != $c && '6' != $c && '7' != $c
+      !$notInSecondSet = %true()
+    !endif
+
+    !if %true() == $notInSecondSet && '8' != $c && '9' != $c
+      !$return = %false()
+      !$loop = 0
+    !endif
+  !endwhile
+
+  !return $return
+!endfunction
+
